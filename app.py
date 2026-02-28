@@ -159,33 +159,34 @@ with st.form("add_food", clear_on_submit=True):
 
 # ─── Current inventory table ───
 if st.session_state.food_items:
-    display_rows = []
-    for i, item in enumerate(st.session_state.food_items):
-        display_rows.append(
-            {
-                "#":              i + 1,
-                "Name":           item["name"],
-                "Cal / unit":     f"{item['_cal_per_unit']:,}",
-                "Units":          item["_units"],
-                "Total cal":      f"{item['calories']:,}",
-                "Expires (day)":  item["_expiry_days"] if item["_expiry_days"] else "Never",
-            }
-        )
-    df_display = pd.DataFrame(display_rows).set_index("#")
-    st.dataframe(df_display, use_container_width=True)
+    # Header row
+    h1, h2, h3, h4, h5, h6 = st.columns([2.5, 1.2, 1.2, 1.5, 1.5, 0.7])
+    h1.markdown("**Name**")
+    h2.markdown("**Cal / unit**")
+    h3.markdown("**Units**")
+    h4.markdown("**Total cal**")
+    h5.markdown("**Expires (day)**")
+    h6.markdown("")
 
-    col_del, col_clear, _ = st.columns([1, 1, 4])
-    with col_del:
-        del_idx = st.number_input(
-            "Delete row #", min_value=1,
-            max_value=len(st.session_state.food_items),
-            step=1, label_visibility="collapsed"
-        )
-    with col_clear:
-        if st.button("🗑 Delete row"):
-            st.session_state.food_items.pop(int(del_idx) - 1)
-            st.session_state.results = None
-            st.rerun()
+    st.divider()
+
+    delete_idx = None
+    for i, item in enumerate(st.session_state.food_items):
+        c1, c2, c3, c4, c5, c6 = st.columns([2.5, 1.2, 1.2, 1.5, 1.5, 0.7])
+        c1.write(item["name"])
+        c2.write(f"{item['_cal_per_unit']:,}")
+        c3.write(f"{item['_units']:,}")
+        c4.write(f"{item['calories']:,}")
+        c5.write(item["_expiry_days"] if item["_expiry_days"] else "Never")
+        if c6.button("🗑", key=f"del_{i}", help=f"Delete {item['name']}"):
+            delete_idx = i
+
+    if delete_idx is not None:
+        st.session_state.food_items.pop(delete_idx)
+        st.session_state.results = None
+        st.rerun()
+
+    st.divider()
     if st.button("🧹 Clear all inventory"):
         st.session_state.food_items = []
         st.session_state.results = None
