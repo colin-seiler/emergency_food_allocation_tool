@@ -113,6 +113,55 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
+    # ── Demo button — pinned to bottom of sidebar ──
+    st.markdown("<div style='flex:1'></div>", unsafe_allow_html=True)
+    st.divider()
+    st.markdown(
+        "<small style='color:#7a9e8a'>Load a pre-built scenario to explore the tool.</small>",
+        unsafe_allow_html=True,
+    )
+    if st.button("🧪 Load Demo Scenario", use_container_width=True):
+        st.session_state.people              = 50
+        st.session_state.calories_per_person = 2000
+        st.session_state.horizon             = 60
+        st.session_state.editing_idx         = None
+        st.session_state.results             = None
+        st.session_state.food_items          = [
+            {
+                "name":          "Canned Fruit",
+                "calories":      600_000,
+                "last_day":      5,
+                "_cal_per_unit": 150,
+                "_units":        4000,
+                "_expiry_days":  5,
+            },
+            {
+                "name":          "Fresh Bread",
+                "calories":      500_000,
+                "last_day":      9,
+                "_cal_per_unit": 250,
+                "_units":        2000,
+                "_expiry_days":  9,
+            },
+            {
+                "name":          "Canned Beans",
+                "calories":      800_000,
+                "last_day":      None,
+                "_cal_per_unit": 400,
+                "_units":        2000,
+                "_expiry_days":  None,
+            },
+            {
+                "name":          "Dried Rice",
+                "calories":      2_700_000,
+                "last_day":      None,
+                "_cal_per_unit": 3600,
+                "_units":        750,
+                "_expiry_days":  None,
+            },
+        ]
+        st.rerun()
+
 # ─────────────────────────────────────────────
 # Header
 # ─────────────────────────────────────────────
