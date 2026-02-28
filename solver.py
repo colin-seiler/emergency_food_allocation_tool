@@ -11,7 +11,8 @@ def solve_food_survival_buckets_with_waste(
     solver_msg=False,
 ):
     """
-    buckets: [{"name": str, "calories": float, "last_day": int|None}, ...]
+    buckets: [{"name": str, "calories": float, "last_day": int|None,
+               "_cal_per_unit": int, "_units": int}, ...]
     people:  number of people
     calories_per_person: daily caloric target per person
     H:       planning horizon in days
@@ -22,25 +23,19 @@ def solve_food_survival_buckets_with_waste(
 
     m = pl.LpProblem("EmergencyFoodAllocation_Buckets", pl.LpMaximize)
 
-    # x[b,t] = calories consumed from bucket b on day t
     x = pl.LpVariable.dicts("x", (B, days), lowBound=0)
-    # y[t] = 1 if day t is survived
     y = pl.LpVariable.dicts("y", days, cat="Binary")
 
-    # Objective: maximise days survived
     m += pl.lpSum(y[t] for t in days)
 
-    # Daily caloric constraints
     for t in days:
         m += pl.lpSum(x[b][t] for b in B) >= D * y[t], f"daily_req_{t}"
         if enforce_no_waste:
             m += pl.lpSum(x[b][t] for b in B) <= D * y[t], f"no_waste_{t}"
 
-    # Consecutive survival (can't skip a day)
     for t in range(1, H):
         m += y[t] >= y[t + 1], f"consecutive_{t}"
 
-    # Inventory and expiry
     for b in B:
         Qb = float(buckets[b]["calories"])
         Lb = buckets[b]["last_day"]
@@ -66,7 +61,6 @@ def solve_food_survival_buckets_with_waste(
 
     max_days = int(round(sum(pl.value(y[t]) for t in days)))
 
-    # Build consumption schedule
     schedule = []
     consumed_by_bucket = {b: 0.0 for b in B}
     consumed_cum = {b: {} for b in B}
@@ -83,7 +77,6 @@ def solve_food_survival_buckets_with_waste(
         row["total"] = total
         schedule.append(row)
 
-    # Waste calculation (crystallised at expiry day)
     waste_day_totals = defaultdict(float)
     waste_day_breakdown = defaultdict(dict)
     total_waste_by_bucket = {}
@@ -119,22 +112,24 @@ def solve_food_survival_buckets_with_waste(
     }
 
 
-def compute_expiry_alerts(result, buckets, people, calories_per_person_full):
+def compute_expiry_alerts(result, buckets, people):
     """
-    Returns dict keyed by day -> list of alert dicts.
-    Alerts appear on the expiry day and the day before.
-    Extra rations always relative to FULL ration.
+    Returns dict keyed by expiry day -> list of alert dicts.
+    Fires only on the expiry day itself.
+    Expresses available food in units-per-person for that specific item.
     """
-    full_daily = people * calories_per_person_full
     alerts = {}
 
-    for b, bucket in enumerate(buckets):
+    for bucket in buckets:
         if bucket["last_day"] is None:
             continue
+
         L = int(bucket["last_day"])
+        name = bucket["name"]
+        cal_per_unit = bucket["_cal_per_unit"]
 
         scheduled_through_L = sum(
-            row.get(bucket["name"], 0.0)
+            row.get(name, 0.0)
             for row in result["schedule"]
             if row["day"] <= L
         )
@@ -142,15 +137,20 @@ def compute_expiry_alerts(result, buckets, people, calories_per_person_full):
         if extra_calories < 1.0:
             continue
 
-        extra_full_rations = extra_calories / full_daily
-        alert = {
-            "bucket": bucket["name"],
-            "expires_day": L,
-            "extra_calories": extra_calories,
-            "extra_full_rations": extra_full_rations,
-        }
-        alerts.setdefault(L, []).append({**alert, "type": "expiry"})
-        if L > 1:
-            alerts.setdefault(L - 1, []).append({**alert, "type": "warning"})
+        extra_units_total = extra_calories / cal_per_unit
+        # Floor to whole units — you can't consume a fraction of a can in practice
+        extra_units_per_person_exact = extra_units_total / people
+        extra_units_per_person_floor = int(extra_units_per_person_exact)
+        remainder_units = extra_units_total - (extra_units_per_person_floor * people)
+
+        alerts.setdefault(L, []).append({
+            "bucket":                    name,
+            "expires_day":               L,
+            "extra_calories":            extra_calories,
+            "extra_units_total":         extra_units_total,
+            "extra_units_per_person":    extra_units_per_person_floor,
+            "remainder_units":           remainder_units,
+            "cal_per_unit":              cal_per_unit,
+        })
 
     return alerts
