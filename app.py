@@ -80,8 +80,8 @@ for k, v in DEFAULTS.items():
 
 RATION_SCENARIOS = {
     "Full (100%)": 1.0,
-    "7/8 Ration":  7 / 8,
     "3/4 Ration":  3 / 4,
+    "2/3 Ration":  2 / 3,
     "1/2 Ration":  1 / 2,
 }
 
@@ -270,7 +270,13 @@ if st.session_state.results:
             )
 
             # ── Daily schedule ──
-            st.markdown("### Daily Schedule")
+            st.markdown("### Daily Plan")
+
+            # Build lookup: item name → cal_per_unit for unit conversion
+            cal_per_unit_lookup = {
+                item["name"]: item["_cal_per_unit"]
+                for item in st.session_state.food_items
+            }
 
             survived_schedule = [
                 row for row in res["schedule"] if row["survived"] == 1
@@ -279,16 +285,12 @@ if st.session_state.results:
             for row in survived_schedule:
                 day = row["day"]
 
-                # Day header
-                st.markdown(f"**Day {day}**")
-
-                # Expiry alerts for this day
+                # Expiry alerts — rendered above the day expander
                 if day in alerts:
                     for alert in alerts[day]:
                         bucket_name  = alert["bucket"]
                         extra_cal    = alert["extra_calories"]
                         extra_ration = alert["extra_full_rations"]
-
                         if alert["type"] == "expiry":
                             st.warning(
                                 f"⚠️ **{bucket_name}** expires today — "
@@ -297,15 +299,37 @@ if st.session_state.results:
                                 f"before this food is lost."
                             )
                         else:
-                            expires_day = alert["expires_day"]
                             st.info(
-                                f"ℹ️ **{bucket_name}** expires on day {expires_day} (tomorrow). "
+                                f"ℹ️ **{bucket_name}** expires tomorrow (day {alert['expires_day']}). "
                                 f"{extra_cal:,.0f} calories at risk — consider consuming "
                                 f"**{extra_ration:.1f} extra full rations** today."
                             )
 
-                # Row dict (raw for now, charts later)
-                st.write(row)
+                # Build human-readable plan rows for items consumed this day
+                plan_rows = []
+                for item in st.session_state.food_items:
+                    cal_consumed = row.get(item["name"], 0.0)
+                    if cal_consumed < 0.5:          # skip effectively-zero allocations
+                        continue
+                    cpu = item["_cal_per_unit"]
+                    units_consumed = cal_consumed / cpu
+                    plan_rows.append({
+                        "Food":           item["name"],
+                        "Units":          f"{units_consumed:.2f}",
+                        "Cal from item":  f"{cal_consumed:,.0f}",
+                    })
+
+                total_cal = row["total"]
+                with st.expander(
+                    f"Day {day} — {total_cal:,.0f} cal total "
+                    f"({total_cal / st.session_state.people:,.0f} per person)",
+                    expanded=False,
+                ):
+                    if plan_rows:
+                        plan_df = pd.DataFrame(plan_rows).set_index("Food")
+                        st.dataframe(plan_df, use_container_width=True)
+                    else:
+                        st.write("No consumption scheduled.")
 
             # ── Waste summary ──
             st.markdown("### Waste Summary")
