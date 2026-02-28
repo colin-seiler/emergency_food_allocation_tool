@@ -394,7 +394,7 @@ if st.session_state.results:
                         # Build the message
                         per_person_str = (
                             f"**{extra_u_pp} additional unit{'s' if extra_u_pp != 1 else ''} "
-                            f"of {name} per person**"
+                            f"of {name}**"
                         )
                         remainder_str = (
                             f" ({remainder:.1f} units left over for the group)"
